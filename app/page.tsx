@@ -1,113 +1,208 @@
-import Image from 'next/image'
+"use client";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/components/ui/use-toast";
+import { openai } from "@/services/ai";
+import { faker } from "@faker-js/faker/locale/pt_BR";
+import {
+  DiscordLogoIcon,
+  DownloadIcon,
+  ReloadIcon,
+} from "@radix-ui/react-icons";
+import { createReadStream } from "fs";
+import Image from "next/image";
+import { useRef, useState } from "react";
 
 export default function Home() {
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [loadingByUpload, setLoadingByUpload] = useState(false);
+  const [generateByUpload, setGenerateByUpload] = useState("");
+  const [generateByPrompt, setGenerateByPrompt] = useState("");
+  const [loadingByPrompt, setLoadingByPrompt] = useState(false);
+  const [prompt, setPrompt] = useState("");
+  const fileNameRef = useRef<string>("");
+  const { toast } = useToast();
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSelectedFile(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const generateByPromptFn = async () => {
+    setGenerateByPrompt("");
+    try {
+      setLoadingByPrompt(true);
+      const response = await openai.images.generate({
+        model: "dall-e-3",
+        prompt: `${prompt}, in anime version`,
+        n: 1,
+        size: "1024x1024",
+      });
+
+      const image_url = response.data[0].url;
+      setGenerateByPrompt(image_url);
+    } catch (error) {
+      toast({
+        title: "Your error response",
+        description: (
+          <pre className="mt-2 w-[340px] rounded-md bg-slate-950 p-4">
+            <code className="text-white">{JSON.stringify(error, null, 2)}</code>
+          </pre>
+        ),
+      });
+    } finally {
+      setLoadingByPrompt(false);
+    }
+  };
+
+  const generateByUploadFn = async () => {
+    try {
+      setLoadingByUpload(true);
+      fileNameRef.current = faker.string.uuid();
+
+      await fetch("/api/upload", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          file: selectedFile,
+          fileName: fileNameRef.current,
+        }),
+      });
+
+      await fetch("/api/edit", {
+        method: "POST",
+        body: JSON.stringify({
+          fileName: fileNameRef.current,
+        }),
+      });
+
+      // const image_url = response.data[0].url;
+      setGenerateByUpload(image_url);
+    } catch (error) {
+      toast({
+        title: "Your error response",
+        description: (
+          <pre className="mt-2 w-[340px] rounded-md bg-slate-950 p-4">
+            <code className="text-white">{JSON.stringify(error, null, 2)}</code>
+          </pre>
+        ),
+      });
+    } finally {
+      setLoadingByUpload(false);
+    }
+  };
+
+  const onDownloadImageByPrompt = async () => {
+    await fetch(`http://localhost:3000/api/download`, {
+      method: "POST",
+      body: JSON.stringify({
+        fileUrl: generateByPrompt,
+      }),
+    });
+  };
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">app/page.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <main className="flex min-h-screen flex-col items-center justify-center">
+      <header className="text-3xl text-accent-foreground">
+        Generate discord icons
+      </header>
+      <span>
+        <DiscordLogoIcon className="h-8 w-8 my-4" />
+      </span>
+      <div className="flex flex-row">
+        <div className="p-12 flex flex-col justify-center items-center">
+          <Label htmlFor="picture">
+            Upload image to generate discord variant
+          </Label>
+          <Input
+            id="picture"
+            className="mt-2"
+            type="file"
+            onChange={handleFileChange}
+          />
+          <Button
+            variant="default"
+            className="mt-4"
+            onClick={generateByUploadFn}
+            disabled={loadingByUpload}
           >
-            By{' '}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+            {loadingByUpload && (
+              <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
+            )}
+            {loadingByUpload ? "Generating" : "Generate"} by prompt
+          </Button>
+          {selectedFile && (
+            <div className="mt-8 flex flex-row">
+              <Image
+                src={selectedFile}
+                alt="Preview"
+                width={500}
+                height={500}
+              />
+              <Image
+                src="/uploads/9e6c3dd9-3e66-4a1a-abd9-1cfcce3923b8image.png"
+                alt="edit"
+                width={500}
+                height={500}
+              />
+            </div>
+          )}
+        </div>
+        <div className="flex justify-center items-center flex-col p-12">
+          <Label htmlFor="prompt">Generate by prompt (anime version)</Label>
+          <Textarea
+            id="prompt"
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder="a cute cat"
+            className="mt-2"
+          />
+          <Button
+            variant="default"
+            className="mt-4"
+            onClick={generateByPromptFn}
+            disabled={loadingByPrompt}
+          >
+            {loadingByPrompt && (
+              <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
+            )}
+            {loadingByPrompt ? "Generating" : "Generate"} by prompt
+          </Button>
+          {generateByPrompt && (
+            <div className="mt-8 relative">
+              <Button asChild onClick={onDownloadImageByPrompt}>
+                <div className="absolute top-2 right-2 z-10 rounded-full bg-slate-800 cursor-pointer">
+                  <DownloadIcon className="h-4 w-4 text-white" />
+                </div>
+              </Button>
+              <Image
+                src={generateByPrompt}
+                alt="Preview"
+                width={500}
+                height={500}
+                className="rounded-full"
+              />
+            </div>
+          )}
+          {loadingByPrompt && (
+            <div className="mt-8">
+              <Skeleton className="w-[500px] h-[500px] rounded-full" />
+            </div>
+          )}
         </div>
       </div>
-
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 before:lg:h-[360px] z-[-1]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Explore the Next.js 13 playground.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
     </main>
-  )
+  );
 }

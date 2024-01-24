@@ -27,7 +27,7 @@ export default function Home() {
   const fileNameRef = useRef<string>("");
   const { toast } = useToast();
 
-  const handleFileChange = (e) => {
+  const handleFileChange = (e: any) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
@@ -42,14 +42,19 @@ export default function Home() {
     setGenerateByPrompt("");
     try {
       setLoadingByPrompt(true);
-      const response = await openai.images.generate({
-        model: "dall-e-3",
-        prompt: `${prompt}, in anime version`,
-        n: 1,
-        size: "1024x1024",
+      const response = await fetch("/api/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt,
+        }),
       });
 
-      const image_url = response.data[0].url;
+      const res = await response.json();
+
+      const image_url = res.url;
       setGenerateByPrompt(image_url);
     } catch (error) {
       toast({
@@ -70,7 +75,7 @@ export default function Home() {
       setLoadingByUpload(true);
       fileNameRef.current = faker.string.uuid();
 
-      await fetch("/api/upload", {
+      const response = await fetch("/api/upload", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -81,21 +86,18 @@ export default function Home() {
         }),
       });
 
-      await fetch("/api/edit", {
-        method: "POST",
-        body: JSON.stringify({
-          fileName: fileNameRef.current,
-        }),
-      });
+      const res = await response.json();
 
-      // const image_url = response.data[0].url;
+      console.log("CLIENTE res", res);
+
+      const image_url = res.url;
       setGenerateByUpload(image_url);
     } catch (error) {
       toast({
         title: "Your error response",
         description: (
           <pre className="mt-2 w-[340px] rounded-md bg-slate-950 p-4">
-            <code className="text-white">{JSON.stringify(error, null, 2)}</code>
+            <code className="text-white">{JSON.stringify(error)}</code>
           </pre>
         ),
       });
@@ -131,34 +133,37 @@ export default function Home() {
             className="mt-2"
             type="file"
             onChange={handleFileChange}
+            accept="image/png"
           />
           <Button
             variant="default"
             className="mt-4"
             onClick={generateByUploadFn}
-            disabled={loadingByUpload}
+            disabled={loadingByUpload || selectedFile === null}
           >
             {loadingByUpload && (
               <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
             )}
-            {loadingByUpload ? "Generating" : "Generate"} by prompt
+            {loadingByUpload ? "Generating" : "Generate"} by upload
           </Button>
-          {selectedFile && (
-            <div className="mt-8 flex flex-row">
+          <div className="flex flex-row gap-4 mt-8">
+            {selectedFile && (
               <Image
                 src={selectedFile}
                 alt="Preview"
-                width={500}
-                height={500}
+                width={250}
+                height={250}
               />
+            )}
+            {generateByUpload && (
               <Image
-                src="/uploads/9e6c3dd9-3e66-4a1a-abd9-1cfcce3923b8image.png"
-                alt="edit"
-                width={500}
-                height={500}
+                src={generateByUpload}
+                alt="Preview"
+                width={250}
+                height={250}
               />
-            </div>
-          )}
+            )}
+          </div>
         </div>
         <div className="flex justify-center items-center flex-col p-12">
           <Label htmlFor="prompt">Generate by prompt (anime version)</Label>
@@ -173,7 +178,7 @@ export default function Home() {
             variant="default"
             className="mt-4"
             onClick={generateByPromptFn}
-            disabled={loadingByPrompt}
+            disabled={loadingByPrompt || prompt.length === 0}
           >
             {loadingByPrompt && (
               <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />

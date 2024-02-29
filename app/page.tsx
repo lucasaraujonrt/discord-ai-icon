@@ -6,7 +6,6 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
-import { openai } from "@/services/ai";
 import { faker } from "@faker-js/faker/locale/pt_BR";
 import {
   DiscordLogoIcon,
